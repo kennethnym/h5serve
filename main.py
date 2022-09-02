@@ -18,7 +18,7 @@ app.state.http_client = aiohttp.ClientSession()
 app.state.download_scheduler = DownloadScheduler(app.state.http_client)
 
 
-@app.get("/request")
+@app.post("/request")
 async def request(request: fastapi.Request):
     """
     An endpoint to request a datafile to be served by this server.
