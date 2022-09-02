@@ -25,12 +25,12 @@ async def request(request: fastapi.Request):
     After receiving a request, the server will begin downloading the datafile to hdf5_files.
     """
 
-    session_id = request.query_params["session_id"]
-    datafile_id = request.query_params["datafile_id"]
+    session_id = request.query_params["sessionId"]
+    datafile_id = request.query_params["datafileId"]
 
     download_scheduler: DownloadScheduler = request.app.state.download_scheduler
 
-    return {"request_id": download_scheduler.schedule(session_id, datafile_id)}
+    return download_scheduler.schedule(session_id, datafile_id).to_json()
 
 
 @app.get("/request/{request_id}")
@@ -38,9 +38,9 @@ async def request_status(request: fastapi.Request):
     request_id = request.path_params["request_id"]
     download_scheduler: DownloadScheduler = request.app.state.download_scheduler
 
-    status = download_scheduler.request_status(request_id)
+    download_request = download_scheduler.get_download_request(int(request_id))
 
-    if not status:
+    if not download_request:
         raise HTTPException(status_code=404, detail="Request not found.")
 
-    return {"request_id": request_id, "status": status}
+    return download_request.to_json()

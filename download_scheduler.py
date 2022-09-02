@@ -1,6 +1,6 @@
 import asyncio
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 import aiohttp
 from h5grove.fastapi_utils import os
 from numpy import random
@@ -14,12 +14,18 @@ class DownloadRequestStatus(str, Enum):
 
 class DownloadRequest:
     def __init__(
-        self, request_id: int, status: DownloadRequestStatus, file_name: str | None
+        self, request_id: int, status: DownloadRequestStatus, path: str | None
     ) -> None:
         self.request_id = request_id
         self.status = status
-        self.file_name = file_name
-        pass
+        self.path = path
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "requestId": self.request_id,
+            "status": self.status,
+            "path": self.path,
+        }
 
 
 class DownloadScheduler:
@@ -34,24 +40,28 @@ class DownloadScheduler:
 
         return id
 
-    def request_status(self, request_id: int) -> Optional[DownloadRequestStatus]:
-        return self._pending_requests[request_id].status
+    def get_download_request(self, request_id: int) -> Optional[DownloadRequest]:
+        try:
+            return self._pending_requests[request_id]
+        except KeyError:
+            return None
 
-    def schedule(self, session_id: str, datafile_id: str) -> int:
+    def schedule(self, session_id: str, datafile_id: str) -> DownloadRequest:
         request_id = self._new_request_id()
         request_params = {
             "sessionId": session_id,
             "datafileIds": datafile_id,
             "compress": "false",
         }
-
-        self._pending_requests[request_id] = DownloadRequest(
-            request_id, status=DownloadRequestStatus.IN_PROGRESS, file_name=None
+        download_request = DownloadRequest(
+            request_id, status=DownloadRequestStatus.IN_PROGRESS, path=None
         )
+
+        self._pending_requests[request_id] = download_request
 
         asyncio.ensure_future(self._start_download(request_params, request_id))
 
-        return self._new_request_id()
+        return download_request
 
     async def _start_download(self, params: dict[str, str], request_id: int):
         request = self._pending_requests[request_id]
@@ -73,9 +83,9 @@ class DownloadScheduler:
             request.status = DownloadRequestStatus.ERROR
             return
 
-        request.file_name = file_name
+        request.path = file_name
 
-        with open(os.path.join("hdf5_files", file_name), "wb") as f:
+        with open(request.path, "wb") as f:
             async for data in response.content.iter_any():
                 f.write(data)
 
